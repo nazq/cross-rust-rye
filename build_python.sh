@@ -23,7 +23,7 @@ build_python_version() {
   
   # Upgrade pip Create venv and install uv
   echo "Upgrade pip, install uv and create scratch venvs with uv"
-  /usr/local/bin/python${py_major_minor} -m pip install --upgrade pip
+  /usr/local/bin/python${py_major_minor} -m pip install --upgrade pip uv
   echo "Creating uv venv in /venvs/.venv_uv_${py_major_minor}" 
   uv venv -p /usr/local/bin/python${py_major_minor} /venvs/.venv_uv_${py_major_minor}
 }
@@ -32,9 +32,6 @@ build_python_version() {
 desired_versions=(3.9.19 3.10.14 3.11.9 3.12.3)
 
 mkdir -p /venvs
-curl -LsSf https://astral.sh/uv/install.sh | sh
-echo 'source $HOME/.cargo/env' >> $HOME/.bashrc
-source $HOME/.bashrc
 
 for py_version in "${desired_versions[@]}"; do
   build_python_version $py_version  # Call the function
