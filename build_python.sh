@@ -33,7 +33,8 @@ desired_versions=(3.9.19 3.10.14 3.11.9 3.12.3)
 
 mkdir -p /venvs
 curl -LsSf https://astral.sh/uv/install.sh | sh
-source $HOME/.cargo/env
+echo 'source $HOME/.cargo/env' >> $HOME/.bashrc
+source $HOME/.bashrc
 
 for py_version in "${desired_versions[@]}"; do
   build_python_version $py_version  # Call the function
