@@ -1,0 +1,41 @@
+# syntax=docker/dockerfile:1.4
+ARG TARGETPLATFORM
+ARG BUILDPLATFORM
+FROM alpine:latest AS build
+
+# Install dependencies
+RUN apk add --no-cache \
+    build-base \
+    wget \
+    curl \
+    openssl-dev \
+    zlib-dev \
+    ncurses-dev \
+    readline-dev \
+    gdbm-dev \
+    bzip2-dev \
+    sqlite-dev \
+    libffi-dev \
+    xz-dev \
+    tk-dev \
+    util-linux-dev \
+    tree
+
+# Copy the build script into the image
+COPY build_python.sh /build_python.sh
+
+# Run the script to build Python versions
+RUN chmod +x /build_python.sh && /build_python.sh
+
+
+# Update PATH to include all installed Python versions
+ENV PATH="/usr/local/bin:${PATH}"
+
+# Verify installations
+RUN python3.9 --version && python3.10 --version && python3.11 --version && python3.12 --version
+
+# Final stage
+FROM alpine:latest
+COPY --from=build / /
+
+CMD ["bash"]

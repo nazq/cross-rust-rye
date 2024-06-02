@@ -7,10 +7,12 @@ on:
   workflow_dispatch:
 
 env:
-  REGISTRY_IMAGE: nazq/cross-rye-py-runner
+  REGISTRY_IMAGE_MANY_LX: nazq/multi-arch-test-manylinux
+  REGISTRY_IMAGE_MUSL_LX: nazq/multi-arch-test-musllinux
+
 
 jobs:
-  build-docker-images:
+  build-many-linux-images:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -20,13 +22,7 @@ jobs:
           - linux/arm64
           - linux/arm/v7
           - linux/ppc64le
-          - linux/ppc64
-          - linux/s390x
-          - linux/riscv64
-          - linux/mips64le
-          - linux/mips64
           - linux/arm/v6
-          - linux/386
     steps:
       - name: Prepare
         run: |
@@ -40,7 +36,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY_IMAGE }}
+          images: ${{ env.REGISTRY_IMAGE_MANY_LX }}
       
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -54,38 +50,124 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
 
+      - name: Restore cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-many-${{ matrix.platform }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-many-${{ matrix.platform }}-
+            ${{ runner.os }}-buildx-many-
+  
+
       - name: Build and push Docker image
         id: build
         uses: docker/build-push-action@v5
         with:
           context: .
           platforms: ${{ matrix.platform }}
+          file: Dockerfile.manylinux
+          tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          outputs: type=image,name=${{ env.REGISTRY_IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=${{ env.REGISTRY_IMAGE_MANY_LX }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache
       
       - name: Export digest
         run: |
-          mkdir -p /tmp/digests
+          mkdir -p /tmp/digests/manylinux
           digest="${{ steps.build.outputs.digest }}"
-          touch "/tmp/digests/${digest#sha256:}"          
+          touch "/tmp/digests/manylinux/${digest#sha256:}"          
       
       - name: Upload digest
         uses: actions/upload-artifact@v4
         with:
           name: digests-${{ env.PLATFORM_PAIR }}
-          path: /tmp/digests/*
+          path: /tmp/digests/manylinux/*
           if-no-files-found: error
           retention-days: 1
 
-  final-build:
+  build-musl-linux-images:
     runs-on: ubuntu-latest
-    needs: build-docker-images
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: 
+          - linux/amd64
+          - linux/arm64
+
+    steps:
+      - name: Prepare
+        run: |
+          platform=${{ matrix.platform }}
+          echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV 
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY_IMAGE_MUSL_LX }}
+      
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+    
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+  
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Restore cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-musl-${{ matrix.platform }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-musl-${{ matrix.platform }}-
+            ${{ runner.os }}-buildx-musl-
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          file: Dockerfile.musllinux
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,name=${{ env.REGISTRY_IMAGE_MUSL_LX }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests/musllinux
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/musllinux/${digest#sha256:}"          
+      
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ env.PLATFORM_PAIR }}
+          path: /tmp/digests/musllinux/*
+          if-no-files-found: error
+          retention-days: 1
+
+  final-build-manylinux:
+    runs-on: ubuntu-latest
+    needs: build-many-linux-images
 
     steps:
       - name: Download digests
         uses: actions/download-artifact@v4
         with:
-          path: /tmp/digests
+          path: /tmp/digests/manylinux
           pattern: digests-*
           merge-multiple: true
     
@@ -96,7 +178,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY_IMAGE }}
+          images: ${{ env.REGISTRY_IMAGE_MANY_LX }}
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
@@ -105,12 +187,48 @@ jobs:
           password: ${{ secrets.DOCKER_TOKEN }}
 
       - name: Create manifest list and push
-        working-directory: /tmp/digests
+        working-directory: /tmp/digests/manylinux
         run: |
           docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf '${{ env.REGISTRY_IMAGE }}@sha256:%s ' *)          
+            $(printf '${{ env.REGISTRY_IMAGE_MANY_LX }}@sha256:%s ' *)          
         
       - name: Inspect image
         run: |
-          docker buildx imagetools inspect ${{ env.REGISTRY_IMAGE }}:${{ steps.meta.outputs.version }}          
-      #,linux/arm/v7,linux/ppc64le,linux/s390x,linux/riscv64,linux/mips64le,linux/mips64,linux/arm/v6
+          docker buildx imagetools inspect ${{ env.REGISTRY_IMAGE_MANY_LX }}:${{ steps.meta.outputs.version }}          
+
+  final-build-musllinux:
+    runs-on: ubuntu-latest
+    needs: build-musl-linux-images
+
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests/musllinux
+          pattern: digests-*
+          merge-multiple: true
+    
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY_IMAGE_MUSL_LX }}
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Create manifest list and push
+        working-directory: /tmp/digests/musllinux
+        run: |
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.REGISTRY_IMAGE_MUSL_LX }}@sha256:%s ' *)          
+        
+      - name: Inspect image
+        run: |
+          docker buildx imagetools inspect ${{ env.REGISTRY_IMAGE_MUSL_LX }}:${{ steps.meta.outputs.version }}

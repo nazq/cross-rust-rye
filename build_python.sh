@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 build_python_version() {
   py_ver=$1
@@ -21,20 +21,22 @@ build_python_version() {
   echo "Built Python ${py_dir} successfully!"
   echo $(/usr/local/bin/python${py_major_minor} --version)
   
-  # Upgrade pip Create venv and install uv
-  echo "Upgrade pip, install uv and create scratch venvs with uv"
-  /usr/local/bin/python${py_major_minor} -m pip install --upgrade pip uv
+  # Upgrade pip, create venv, and install uv
+  echo "Create scratch venvs with uv"
   echo "Creating uv venv in /venvs/.venv_uv_${py_major_minor}" 
   uv venv -p /usr/local/bin/python${py_major_minor} /venvs/.venv_uv_${py_major_minor}
 }
 
-
-desired_versions=(3.9.19 3.10.14 3.11.9 3.12.3)
+# Define desired Python versions as a space-separated string
+desired_versions="3.9.19 3.10.14 3.11.9 3.12.3"
 
 mkdir -p /venvs
+curl -LsSf https://astral.sh/uv/install.sh | sh
+ln -s $HOME/.cargo/bin/uv /usr/local/bin/uv
 
-for py_version in "${desired_versions[@]}"; do
+# Iterate over desired Python versions
+for py_version in $desired_versions; do
   build_python_version $py_version  # Call the function
 done
 
-echo "Build completed for desired Python versions. ${desired_versions[*]}"
+echo "Build completed for desired Python versions: $desired_versions"

@@ -1,0 +1,5 @@
+# syntax=docker/dockerfile:1
+FROM --platform=$TARGETPLATFORM ubuntu:latest AS build
+ARG TARGETPLATFORM
+ARG BUILDPLATFORM
+RUN echo "I am running on $BUILDPLATFORM, building for $TARGETPLATFORM" > /log
