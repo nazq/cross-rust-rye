@@ -2,8 +2,8 @@
 
 # Define the images
 images=(
-  "nazq/multi-arch-test-musllinux:latest"
-  "nazq/multi-arch-test-manylinux:latest"
+  "nazq/multi-arch-py-musllinux:latest"
+  "nazq/multi-arch-py-manylinux:latest"
 )
 
 # Function to get supported platforms from the Docker manifest

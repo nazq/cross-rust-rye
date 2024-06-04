@@ -7,8 +7,8 @@ on:
   workflow_dispatch:
 
 env:
-  REGISTRY_IMAGE_MANY_LX: nazq/multi-arch-test-manylinux
-  REGISTRY_IMAGE_MUSL_LX: nazq/multi-arch-test-musllinux
+  REGISTRY_IMAGE_MANY_LX: nazq/multi-arch-py-manylinux
+  REGISTRY_IMAGE_MUSL_LX: nazq/multi-arch-py-musllinux
 
 
 jobs:
@@ -20,9 +20,9 @@ jobs:
         platform: 
           - linux/amd64
           - linux/arm64
-          - linux/arm/v7
-          - linux/ppc64le
-          - linux/arm/v6
+#          - linux/arm/v7
+#          - linux/ppc64le
+#          - linux/arm/v6
     steps:
       - name: Prepare
         run: |
@@ -57,8 +57,6 @@ jobs:
           key: ${{ runner.os }}-buildx-many-${{ matrix.platform }}
           restore-keys: |
             ${{ runner.os }}-buildx-many-${{ matrix.platform }}-
-            ${{ runner.os }}-buildx-many-
-  
 
       - name: Build and push Docker image
         id: build
@@ -77,7 +75,8 @@ jobs:
         run: |
           mkdir -p /tmp/digests/manylinux
           digest="${{ steps.build.outputs.digest }}"
-          touch "/tmp/digests/manylinux/${digest#sha256:}"          
+          touch "/tmp/digests/manylinux/${digest#sha256:}"
+          cat /tmp/digests/manylinux/*          
       
       - name: Upload digest
         uses: actions/upload-artifact@v4
@@ -130,7 +129,6 @@ jobs:
           key: ${{ runner.os }}-buildx-musl-${{ matrix.platform }}
           restore-keys: |
             ${{ runner.os }}-buildx-musl-${{ matrix.platform }}-
-            ${{ runner.os }}-buildx-musl-
 
       - name: Build and push Docker image
         id: build
@@ -149,7 +147,8 @@ jobs:
         run: |
           mkdir -p /tmp/digests/musllinux
           digest="${{ steps.build.outputs.digest }}"
-          touch "/tmp/digests/musllinux/${digest#sha256:}"          
+          touch "/tmp/digests/musllinux/${digest#sha256:}"
+          cat "/tmp/digests/musllinux/*"          
       
       - name: Upload digest
         uses: actions/upload-artifact@v4
@@ -189,8 +188,10 @@ jobs:
       - name: Create manifest list and push
         working-directory: /tmp/digests/manylinux
         run: |
-          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf '${{ env.REGISTRY_IMAGE_MANY_LX }}@sha256:%s ' *)          
+          manifest_params="$(jq -cr '.tags | map("-t " + .) | join(" ")' <<< \"$DOCKER_METADATA_OUTPUT_JSON\") \
+            $(printf '${{ env.REGISTRY_IMAGE_MANY_LX }}@sha256:%s ' *)"
+          echo "Manifest parameters: $manifest_params"
+          docker buildx imagetools create $manifest_params     
         
       - name: Inspect image
         run: |
@@ -226,9 +227,11 @@ jobs:
       - name: Create manifest list and push
         working-directory: /tmp/digests/musllinux
         run: |
-          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf '${{ env.REGISTRY_IMAGE_MUSL_LX }}@sha256:%s ' *)          
-        
+          manifest_params="$(jq -cr '.tags | map("-t " + .) | join(" ")' <<< \"$DOCKER_METADATA_OUTPUT_JSON\") \
+            $(printf '${{ env.REGISTRY_IMAGE_MUSL_LX }}@sha256:%s ' *)"
+          echo "Manifest parameters: $manifest_params"
+          docker buildx imagetools create $manifest_params     
+    
       - name: Inspect image
         run: |
           docker buildx imagetools inspect ${{ env.REGISTRY_IMAGE_MUSL_LX }}:${{ steps.meta.outputs.version }}

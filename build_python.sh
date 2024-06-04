@@ -30,6 +30,8 @@ build_python_version() {
 # Define desired Python versions as a space-separated string
 desired_versions="3.9.19 3.10.14 3.11.9 3.12.3"
 
+curl https://sh.rustup.rs -sSf | sh -s -- -y
+echo ". $HOME/.cargo/env" >> $HOME/.profile
 mkdir -p /venvs
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ln -s $HOME/.cargo/bin/uv /usr/local/bin/uv

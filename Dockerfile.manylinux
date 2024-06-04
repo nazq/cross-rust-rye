@@ -35,10 +35,7 @@ RUN /build_python.sh
 ENV PATH="/usr/local/bin:${PATH}"
 
 # Verify installations
+#RUN python3.9 --version && python3.10 --version 
 RUN python3.9 --version && python3.10 --version && python3.11 --version && python3.12 --version
-
-# Final stage
-FROM debian:latest
-COPY --from=build / /
 
 CMD ["bash"]
